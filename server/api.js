@@ -368,10 +368,10 @@ export async function handle(req, env) {
 
     /* ----- পাবলিক ----- */
     if (M === 'GET' && path === 'store') {
-      const [pr, st] = await db.batch([db.prepare(`SELECT * FROM products WHERE active=1 ORDER BY pos ASC, updated DESC`), db.prepare(`SELECT k,v FROM settings WHERE k IN ('hero','offer','promo','gate','loyalty')`)]);
+      const [pr, st] = await db.batch([db.prepare(`SELECT * FROM products WHERE active=1 ORDER BY pos ASC, updated DESC`), db.prepare(`SELECT k,v FROM settings WHERE k IN ('hero','offer','promo','gate','loyalty','mail')`)]);
       const g = (k) => { const r = st.results.find((x) => x.k === k); return r ? JSON.parse(r.v) : SEED_SETTINGS[k]; };
       const gate = g('gate'), L = { ...LOY_DEFAULT, ...(g('loyalty') || {}) };
-      return json({ products: pr.results.map(rowToProduct), hero: g('hero'), offer: g('offer'), promo: { percent: g('promo').percent }, requireLogin: !gate || gate.requireLogin !== false, loyalty: { enabled: L.enabled, orders: L.orders, reward: L.reward, min: L.min } });   // প্রোমো কোড এখানে পাঠানো হয় না
+      return json({ products: pr.results.map(rowToProduct), hero: g('hero'), offer: g('offer'), promo: { percent: g('promo').percent }, requireLogin: !gate || gate.requireLogin !== false, mailKeys: ((g('mail') || {}).keys || []), loyalty: { enabled: L.enabled, orders: L.orders, reward: L.reward, min: L.min } });   // প্রোমো কোড এখানে পাঠানো হয় না
     }
     if (M === 'POST' && path === 'track') {
       const b = await body(), t = String(b.t || ''), vid = String(b.vid || '');
@@ -598,6 +598,15 @@ export async function handle(req, env) {
           if (chat && !/^-?\d{4,20}$|^@[A-Za-z0-9_]{4,}$/.test(chat)) throw bad('Chat ID looks wrong (use the number from @userinfobot).');
           if (tok && !tok.startsWith('••••') && !/^\d{5,12}:[A-Za-z0-9_-]{20,}$/.test(tok)) throw bad('Bot token looks wrong. It looks like 123456789:ABC… (from @BotFather).');
           await setSetting(db, 'notify', { tgToken: tok.startsWith('••••') ? n.tgToken : tok, tgChat: chat }); return json({ ok: true });
+        }
+      }
+      if (A === 'mail') {
+        if (user.role !== 'owner') throw bad('Only the owner can do this.', 403);
+        if (M === 'GET') return json({ keys: ((await getSetting(db, 'mail')) || {}).keys || [] });
+        if (M === 'PUT') {
+          const b = await body(), ks = (Array.isArray(b.keys) ? b.keys : String(b.keys || '').split(/[\s,]+/)).map((x) => String(x).trim().toLowerCase()).filter(Boolean);
+          if (ks.length > 5) throw bad('Up to 5 keys.'); for (const k of ks) if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(k)) throw bad('A key looks wrong: ' + k.slice(0, 12) + '… (it should look like xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx).');
+          await setSetting(db, 'mail', { keys: [...new Set(ks)] }); return json({ ok: true });
         }
       }
       if (M === 'POST' && A === 'notify/test') { if (user.role !== 'owner') throw bad('Only the owner can do this.', 403); return json(await notifyOwnerR(db, '✅ Manar BD: test notification. Orders will arrive here.')); }

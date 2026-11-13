@@ -4178,19 +4178,47 @@ html { scroll-behavior: auto; }
   -webkit-backdrop-filter: none !important; backdrop-filter: none !important;
 }
 .card-img .badge, .card-img .badge.sale, .card-img .badge.oos { background: rgba(236, 236, 240, .86) !important; }
-.card-img .fd { background: rgba(255, 255, 255, .9) !important; }
-:root[data-theme="dark"] .card-img .fd { background: rgba(30, 30, 34, .88) !important; }
+/* Free delivery: কমলা স্ট্রিপ, সাদা লেখা ও আইকন, কোনো ব্লার নেই */
+.card-img .fd { background: var(--accent-strong) !important; color: #fff !important; }
+.card-img .fd .fd-ic { background: #fff !important; }
 
 /* ছবি আসার আগের ঝিলিক শুধু skeleton কার্ডে; আসল কার্ডে ১৬টা অ্যানিমেশন একসাথে চলত */
 .card-img { animation: none !important; }
 .card.sk .card-img { animation: mb-shimmer 1.3s linear infinite !important; }
 
 /* হেডার, উপরের স্ট্যাটাস-বার ও নিচের নেভিগেশন: স্ক্রলের সময় প্রতি ফ্রেমে ব্লার না করে প্রায়-ঘন রং */
-body::before, .top { -webkit-backdrop-filter: none; backdrop-filter: none; }
-body::before, .top { background: color-mix(in srgb, var(--surface) 94%, transparent); }
-.top .sq { -webkit-backdrop-filter: none; backdrop-filter: none; }
+/* হেডার আগের মতোই কাচের ব্লারসহ (v16-র মতো) */
 
 /* কার্ড স্ক্রিনের বাইরে থাকলে ব্রাউজার আঁকে না; ভেতরে এলেই আঁকে (লম্বা তালিকায় বড় সুবিধা) */
 .grid > .card { content-visibility: auto; contain-intrinsic-size: auto 270px; }
 .card-img img { transform: translateZ(0); }
 img { image-rendering: auto; }
+
+/* ================== v18 ================== */
+/* নিচের নেভ: ডার্কে হালকা কমলা গ্লো */
+:root[data-theme="dark"] .bnav {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--surface) 86%, #DB6205 14%), var(--surface) 70%);
+  box-shadow: 0 -8px 30px rgba(229, 112, 10, .26), 0 -1px 0 rgba(242, 138, 30, .45);
+}
+:root[data-theme="dark"] .bnav button.on { text-shadow: 0 0 12px rgba(242, 138, 30, .75); }
+:root[data-theme="dark"] .bnav button.on .ic { filter: drop-shadow(0 0 6px rgba(242, 138, 30, .85)); }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .bnav {
+    background: linear-gradient(180deg, color-mix(in srgb, var(--surface) 86%, #DB6205 14%), var(--surface) 70%);
+    box-shadow: 0 -8px 30px rgba(229, 112, 10, .26), 0 -1px 0 rgba(242, 138, 30, .45);
+  }
+  :root:not([data-theme="light"]) .bnav button.on { text-shadow: 0 0 12px rgba(242, 138, 30, .75); }
+  :root:not([data-theme="light"]) .bnav button.on .ic { filter: drop-shadow(0 0 6px rgba(242, 138, 30, .85)); }
+}
+
+/* লোগো-লোডার: মানার লোগোর আকারে কমলা আলো ঘুরে যায় */
+.mbl { display: grid; justify-items: center; gap: 14px; padding: 48px 0; color: var(--muted); font-size: .85rem; }
+.mbl i {
+  display: block; width: 72px; height: 72px;
+  -webkit-mask: url("../images/brand/favicon.png") center / contain no-repeat; mask: url("../images/brand/favicon.png") center / contain no-repeat;
+  background: linear-gradient(105deg, #C2540A 0%, #C2540A 35%, #FFC184 50%, #C2540A 65%, #C2540A 100%) 0 0 / 300% 100%;
+  animation: mbl-sweep 1.25s ease-in-out infinite, mbl-pulse 1.25s ease-in-out infinite;
+}
+@keyframes mbl-sweep { from { background-position: 100% 0; } to { background-position: 0 0; } }
+@keyframes mbl-pulse { 0%, 100% { transform: scale(.94); } 50% { transform: scale(1.04); } }
+@media (prefers-reduced-motion: reduce) { .mbl i { animation: none; } }

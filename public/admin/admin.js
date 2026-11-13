@@ -45,7 +45,8 @@
     $('#out').onclick = function () { api('auth/logout', { method: 'POST', json: {} }).then(function () { me = null; route(); }); };
   }
   var pendingCount = 0;
-  function loading() { app.innerHTML = '<div class="login"><p class="muted">Loading…</p></div>'; }
+  var LOADER = '<div class="mbl" role="status" aria-label="Loading"><i></i></div>';
+  function loading() { app.innerHTML = LOADER; }
 
   /* ---------- লগইন ---------- */
   function loginView(msg) {
@@ -137,8 +138,12 @@
           tip.hidden = false; tip.innerHTML = '<b>' + money(d.revenue[i]) + '</b><small>' + d.orders[i] + ' order(s) · ' + d.days[i].slice(8) + '/' + d.days[i].slice(5, 7) + '</small>';
           tip.style.left = Math.min(Math.max(px / 600 * 100, 14), 86) + '%';
         };
-        svg.addEventListener('pointermove', show); svg.addEventListener('pointerdown', show);
-        svg.addEventListener('pointerleave', function () { tip.hidden = true; $('#lcTip').setAttribute('hidden', ''); });
+        // ট্যাপ করলে সেখানেই তথ্য থাকে (আঙুল তুললেও); অন্য জায়গায় ট্যাপ বা আবার ট্যাপ করলে বদলায়/মোছে। মাউসে hover করলেও দেখায়
+        var hide = function () { tip.hidden = true; $('#lcTip').setAttribute('hidden', ''); };
+        svg.addEventListener('pointerdown', show);
+        svg.addEventListener('pointermove', function (ev) { if (ev.pointerType === 'mouse' || ev.buttons) show(ev); });
+        svg.addEventListener('pointerleave', function (ev) { if (ev.pointerType === 'mouse') hide(); });
+        document.addEventListener('pointerdown', function oc(ev) { if (!document.body.contains(svg)) { document.removeEventListener('pointerdown', oc); return; } if (!svg.contains(ev.target)) hide(); });
       }
     }, fail);
   }
@@ -366,8 +371,8 @@
   /* ---------- সেটআপ: সাইন-ইন টিক, নোটিফিকেশন, ব্লক লিস্ট ---------- */
   function setup() {
     var owner = me.role === 'owner';
-    Promise.all([api('admin/settings'), owner ? api('admin/notify') : Promise.resolve(null), api('admin/blocked')]).then(function (r) {
-      var g = r[0].gate || { requireLogin: true }, n = r[1], bl = r[2].blocked;
+    Promise.all([api('admin/settings'), owner ? api('admin/notify') : Promise.resolve(null), api('admin/blocked'), owner ? api('admin/mail') : Promise.resolve({ keys: [] })]).then(function (r) {
+      var g = r[0].gate || { requireLogin: true }, n = r[1], bl = r[2].blocked, mk = r[3].keys || [];
       var perm = window.Notification ? Notification.permission : 'unsupported';
       shell('setup', '<h2>Setup</h2>' +
         '<div class="card"><h3>Order sign-in</h3><label class="chk"><input type="checkbox" id="gl"' + (g.requireLogin ? ' checked' : '') + '> Customers must sign up / sign in before ordering</label>' +
@@ -376,11 +381,22 @@
         (owner ? '<div class="card"><h3>Telegram order alerts (free)</h3><ol class="muted steps"><li>Telegram এ <b>@BotFather</b> খুলে <b>/newbot</b> দিন, নাম দিন। সে একটি <b>token</b> দেবে।</li><li>আপনার নতুন bot এ গিয়ে <b>Start</b> চাপুন।</li><li><b>@userinfobot</b> এ Start দিলে আপনার <b>Chat ID</b> (সংখ্যা) দেবে।</li><li>নিচে দুটো বসিয়ে Save, তারপর Send test চাপুন।</li></ol>' +
           '<label class="f">Bot token<input id="tt" autocomplete="off" placeholder="123456789:ABC..." value="' + esc(n.tgToken) + '"></label><label class="f">Chat ID<input id="tc" inputmode="numeric" autocomplete="off" placeholder="e.g. 123456789" value="' + esc(n.tgChat) + '"></label>' +
           '<div class="stat-btns"><button class="btn" id="ts">Save</button><button class="btn line" id="tt2">Send test</button></div></div>' : '<div class="card"><p class="muted" style="margin:0">Only the owner can set up Telegram alerts.</p></div>') +
+        (owner ? '<div class="card"><h3>Order & subscriber emails (Web3Forms)</h3><p class="muted" style="margin:0 0 8px">অর্ডার ও subscribe ইমেইল যে Web3Forms access key দিয়ে যাবে। ফ্রি প্ল্যানে প্রতি <b>মাসে ২৫০টা</b> ইমেইল (মাস শেষে আবার ০ থেকে শুরু)। একাধিক key দিলে একটার লিমিট শেষ হলে সাইট নিজেই পরেরটা দিয়ে পাঠায়। প্রতি লাইনে একটা key (সর্বোচ্চ ৫টা)।</p>' +
+          '<label class="f">Access keys<textarea id="mk" rows="3" autocomplete="off" spellcheck="false" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx">' + esc(mk.join('\n')) + '</textarea></label>' +
+          '<div class="stat-btns"><button class="btn" id="mks">Save</button><button class="btn line" id="mkt">Send test email</button></div><p class="muted" id="mkr" style="margin:8px 0 0"></p></div>' : '') +
         '<div class="card"><h3>Blocked numbers (' + bl.length + ')</h3>' + (bl.length ? '<div class="rows">' + bl.map(function (b) { return '<div class="row"><div class="grow"><b>' + esc(b.phone) + '</b><small>' + esc(b.note || '') + '</small></div><button class="btn line sm" data-ub="' + esc(b.phone) + '">Unblock</button></div>'; }).join('') + '</div>' : '<p class="muted" style="margin:0">None. Open a suspicious order and tap Block.</p>') + '</div>', pendingCount);
       $('#gs').onclick = function () { api('admin/settings', { method: 'PUT', json: { gate: { requireLogin: $('#gl').checked } } }).then(function () { toast($('#gl').checked ? 'Sign-in is required' : 'Guests can order now'); }, fail); };
       $('#pn').onclick = function () { if (window.Notification && Notification.permission === 'default') Notification.requestPermission().then(function () { setup(); }); };
       $$('[data-ub]').forEach(function (b) { b.onclick = function () { api('admin/block/' + b.dataset.ub, { method: 'DELETE' }).then(function () { toast('Unblocked'); setup(); }, fail); }; });
       if (owner) {
+        $('#mks').onclick = function () { api('admin/mail', { method: 'PUT', json: { keys: $('#mk').value } }).then(function () { toast('Saved. New orders will use these keys.'); }, fail); };
+        $('#mkt').onclick = function () {
+          var ks = $('#mk').value.split(/[\s,]+/).filter(Boolean), out = $('#mkr'); if (!ks.length) { out.textContent = 'Add a key first.'; return; }
+          out.textContent = 'Sending…'; var res = [], i = 0;
+          (function next() { if (i >= ks.length) { out.textContent = res.join('  ·  '); return; } var k = ks[i++];
+            fetch('https://api.web3forms.com/submit', { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' }, body: JSON.stringify({ access_key: k, subject: 'Manar BD test email', from_name: 'Manar BD', message: 'Test email from Setup. Orders will arrive like this.' }) })
+              .then(function (x) { return x.json(); }).then(function (j) { res.push('Key ' + i + ': ' + (j.success ? 'OK, check inbox' : (j.message || 'failed'))); }, function () { res.push('Key ' + i + ': no connection'); }).then(next); })();
+        };
         $('#ts').onclick = function () { api('admin/notify', { method: 'PUT', json: { tgToken: $('#tt').value.trim(), tgChat: $('#tc').value.trim() } }).then(function () { toast('Saved'); }, fail); };
         $('#tt2').onclick = function () { api('admin/notify/test', { json: {} }).then(function (j) { toast(j.ok ? 'Test sent. Check Telegram.' : 'Telegram says: ' + (j.err || 'unknown error')); }, fail); };
       }
@@ -408,6 +424,7 @@
     if (me.role === 'customer') { app.innerHTML = '<div class="login"><h2>No admin access</h2><p class="msg bad">This account (' + esc(me.name) + ') is not an admin.</p><a class="btn" href="/">Back to shop</a><button class="btn line" id="o2">Sign out</button></div>'; $('#o2').onclick = function () { api('auth/logout', { method: 'POST', json: {} }).then(function () { me = null; route(); }); }; return; }
     var h = location.hash.replace(/^#\/?/, '').split('/'), a = h[0] || '';
     window.scrollTo(0, 0);
+    var mw = app.querySelector('main.wrap'); if (mw) mw.innerHTML = '<div class="mbl in" role="status" aria-label="Loading"><i></i></div>';
     if (a === '') dashboard(); else if (a === 'orders') h[1] ? orderDetail(h[1]) : orders(); else if (a === 'products') products();
     else if (a === 'product') productForm(decodeURIComponent(h[1] || 'new')); else if (a === 'banners') banners(); else if (a === 'settings') settings(); else if (a === 'users') users(); else if (a === 'setup') setup(); else dashboard();
   }

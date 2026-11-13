@@ -450,11 +450,19 @@
     updateWa();
   }
   function loadMe() {
-    return api('me').then(function (j) { me = j.user; myCount = me ? (me.loyaltyProgress != null ? me.loyaltyProgress : me.orderCount) : undefined; myCode = me && me.loyaltyCode || ''; prefill(); renderReward(); return me; }).catch(function () { me = null; });
+    return api('me').then(function (j) { me = j.user; myCount = me ? (me.loyaltyProgress != null ? me.loyaltyProgress : me.orderCount) : undefined; myCode = me && me.loyaltyCode || ''; prefill(); renderReward(); pollPending(); return me; }).catch(function () { me = null; });
   }
+  /* শুধু অ্যাডমিন/ওনার: নিচের Orders আইকনে নতুন (pending) অর্ডারের সংখ্যা */
+  var ordTimer = 0;
+  function pollPending() {
+    var d = $('#bnOrd'); if (!d) return;
+    if (!S.api || !me || (me.role !== 'admin' && me.role !== 'owner')) { d.hidden = true; return; }
+    api('admin/stats').then(function (j) { var n = +j.pending || 0; d.textContent = n > 99 ? '99+' : n; d.hidden = !n; }).catch(function () {});
+  }
+  setInterval(function () { if (!document.hidden) pollPending(); }, 15000);
   function loadMyOrders() { return api('me/orders').then(function (j) { myOrders = j.orders; }).catch(function () { myOrders = []; }); }
   function openAccount() {
-    accMsg = ''; accView = 'home'; $('#accBody').innerHTML = '<div class="empty"><p>Loading…</p></div>'; hideAll(); show($('#account'));
+    accMsg = ''; accView = 'home'; $('#accBody').innerHTML = '<div class="mbl" role="status" aria-label="Loading"><i></i></div>'; hideAll(); show($('#account'));
     loadMe().then(function () { return me ? loadMyOrders() : null; }).then(renderAccount);
   }
   function msgHtml() { return accMsg ? '<p class="hint ' + (accMsg.charAt(0) === '!' ? 'bad' : 'ok') + '" role="alert">' + esc(accMsg.replace(/^!/, '')) + '</p>' : ''; }
@@ -777,17 +785,26 @@
   $('#q').addEventListener('input', function (e) { st.q = e.target.value; st.limit = 12; if (st.q.trim()) st.tag = 'all'; renderAll(); });
   $('#orderForm').addEventListener('input', updateWa);
   $('#payCod').addEventListener('change', function () { if (this.checked) { $('[data-err="payCod"]').textContent = ''; $('.pay').classList.remove('bad'); } });
+  /* Web3Forms: এক বা একাধিক কি। একটার মাসিক লিমিট শেষ হলে/ব্যর্থ হলে পরেরটা চেষ্টা করে */
+  function mailKeys() { return (S.mailKeys && S.mailKeys.length ? S.mailKeys : (S.web3formsKey ? [S.web3formsKey] : [])); }
+  function w3send(payload) {
+    var ks = mailKeys(); if (!ks.length) return Promise.reject(new Error('key'));
+    var i = 0;
+    function next(err) {
+      if (i >= ks.length) return Promise.reject(err || new Error('fail'));
+      var body = Object.assign({}, payload, { access_key: ks[i++] });
+      return fetch('https://api.web3forms.com/submit', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' }, body: JSON.stringify(body) })
+        .then(function (r) { return r.json(); }).then(function (j) { if (!j.success) throw new Error(j.message || 'fail'); return j; }).catch(next);
+    }
+    return next();
+  }
   function sendEmail(id) {
     var t = totals();
-    if (!S.web3formsKey) return Promise.reject(new Error('key'));
-    return fetch('https://api.web3forms.com/submit', {
-      method: 'POST', headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-      body: JSON.stringify({
-        access_key: S.web3formsKey, subject: 'New order ' + id + ' – ' + fval('name') + ' (' + money(t.total) + ')', from_name: S.name + ' website',
+    return w3send({
+        subject: 'New order ' + id + ' – ' + fval('name') + ' (' + money(t.total) + ')', from_name: S.name + ' website',
         order_id: id, name: fval('name'), phone: fval('phone'), district: fval('dist'), address: fval('addr'), note: $('#fNote').value.trim() || '-',
         payment: 'Cash on Delivery', total: money(t.total), message: orderText(id)
-      })
-    }).then(function (r) { return r.json(); }).then(function (j) { if (!j.success) throw new Error(j.message || 'fail'); });
+    });
   }
   $('#subForm').addEventListener('submit', function (e) {
     e.preventDefault();
@@ -795,11 +812,10 @@
     var say = function (cls, txt) { m.className = 'sub-msg ' + cls; m.textContent = txt; };
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(em)) { say('bad', 'Please enter a valid email address.'); $('#subEmail').focus(); return; }
     if (!$('#subAgree').checked) { say('bad', 'Please tick the box to agree to receive offers.'); return; }
-    if (!S.web3formsKey) { say('bad', 'Subscription is not set up yet. Add web3formsKey in js/data.js.'); return; }
+    if (!mailKeys().length) { say('bad', 'Subscription is not set up yet.'); return; }
     btn.disabled = true; say('', 'Sending…');
-    fetch('https://api.web3forms.com/submit', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-      body: JSON.stringify({ access_key: S.web3formsKey, subject: 'New offers & updates subscriber', from_name: S.name + ' website', email: em, message: 'Please add ' + em + ' to the offers and updates list.' }) })
-      .then(function (r) { return r.json(); }).then(function (j) { if (!j.success) throw 0; say('ok', 'Thank you! You are on the list.'); $('#subForm').reset(); })
+    w3send({ subject: 'New offers & updates subscriber', from_name: S.name + ' website', email: em, message: 'Please add ' + em + ' to the offers and updates list.' })
+      .then(function () { say('ok', 'Thank you! You are on the list.'); $('#subForm').reset(); })
       .catch(function () { say('bad', 'Could not send. Check your internet and try again.'); })
       .then(function () { btn.disabled = false; });
   });
@@ -815,7 +831,7 @@
     b.classList.add('go');
     var wait = new Promise(function (r) { setTimeout(r, 1800); });
     var send = S.api
-      ? placeOrder('direct').then(function (r) { if (S.web3formsKey) sendEmail(r.number).catch(function () {}); if (S.api) loadMe(); return r.number; })      // ব্যাকএন্ডে সেভ + ঐচ্ছিক ইমেল
+      ? placeOrder('direct').then(function (r) { if (mailKeys().length) sendEmail(r.number).catch(function () {}); if (S.api) loadMe(); return r.number; })      // ব্যাকএন্ডে সেভ + ঐচ্ছিক ইমেল
       : sendEmail(id).then(function () { return id; });
     Promise.all([send, wait]).then(function (r) {
       b.classList.remove('go'); sending = false; finalize('direct', r[0]);
@@ -824,7 +840,7 @@
         b.classList.remove('go'); sending = false;
         if (S.api && err && err.status === 403) { blockedBox(err.message); return; }
         if (S.api) { toast(err && err.message ? err.message : 'Order could not be sent. Please try again or order on WhatsApp.'); return; }
-        toast(err && err.message === 'key' ? 'Order not sent: add your web3formsKey in js/data.js.' : 'Order could not be sent. Check your internet and try again, or order on WhatsApp.');
+        toast(err && err.message === 'key' ? 'Order email is not set up yet.' : 'Order could not be sent. Check your internet and try again, or order on WhatsApp.');
       }, 1800);
     });
   });
@@ -833,7 +849,7 @@
     if (!validate()) { e.preventDefault(); return; }
     updateWa();
     var placed = S.api ? placeOrder('whatsapp', true).then(function (r) { loadMe(); return r; }).catch(function (e) { return e && e.status === 403 ? { blocked: e.message } : null; }) : Promise.resolve(null);   // WhatsApp অর্ডারও ডাটাবেসে সেভ হয়
-    setTimeout(function () { placed.then(function (r) { if (r && r.blocked) { blockedBox(r.blocked); return; } if (r && S.web3formsKey) sendEmail(r.number).catch(function () {}); finalize('whatsapp', r && r.number); }); }, 600);   // WhatsApp অর্ডারেও ইমেল
+    setTimeout(function () { placed.then(function (r) { if (r && r.blocked) { blockedBox(r.blocked); return; } if (r && mailKeys().length) sendEmail(r.number).catch(function () {}); finalize('whatsapp', r && r.number); }); }, 600);   // WhatsApp অর্ডারেও ইমেল
   });
   window.addEventListener('scroll', function () { $('#bnHome').classList.toggle('on', window.scrollY < 300); }, { passive: true });
 

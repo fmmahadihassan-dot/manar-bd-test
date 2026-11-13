@@ -14,7 +14,7 @@ window.STORE = {
   /* ফুটারের সোশ্যাল লিংক: নিজের পেজের লিংক বসান, ফাঁকা রাখলে আইকন লুকিয়ে যাবে (WhatsApp নিজে থেকেই আসে) */
   social: { facebook: 'https://facebook.com/', instagram: 'https://instagram.com/', messenger: 'https://m.me/', youtube: 'https://youtube.com/' },
   /* অর্ডার ইমেইলে পাঠাতে: web3forms.com এ আপনার ইমেইল দিয়ে Access Key নিয়ে এখানে বসান */
-  web3formsKey: '6cf4b300-ba5f-4c67-a56e-dd9fdd664c71',          // অর্ডারের ইমেইল আসার জন্য (Web3Forms)
+  web3formsKey: '',          // অর্ডারের ইমেইল আসার জন্য (Web3Forms)
   /* ---------------------------------------------------------------
      হিরো ব্যানারের নিচের রিওয়ার্ড কার্ড ("Buy 5 get 200 TK discount")
        enabled: false দিলে কার্ডটা দেখাবে না

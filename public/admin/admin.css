@@ -241,7 +241,7 @@ form#pf, form#sf { display: grid; gap: 10px; }
 .lc .ol { fill: none; stroke: var(--accent); stroke-width: 2; stroke-dasharray: 5 5; opacity: .6; }
 .lc .dot { fill: var(--surface); stroke: var(--accent); stroke-width: 3; }
 .card:has(.lc) { position: relative; }
-.tip { position: absolute; top: 56px; transform: translateX(-50%); padding: 6px 10px; border-radius: 10px; background: var(--surface); box-shadow: 0 4px 16px rgba(0,0,0,.18); text-align: center; pointer-events: none; display: grid; }
+.tip { white-space: nowrap; position: absolute; top: 30px; z-index: 3; transform: translateX(-50%); padding: 6px 10px; border-radius: 10px; background: var(--surface); box-shadow: 0 4px 16px rgba(0,0,0,.18); text-align: center; pointer-events: none; display: grid; }
 .tip small { color: var(--muted); }
 .gauge { width: 100%; max-width: 260px; margin-inline: auto; display: block; }
 .g-bg, .g-fg { fill: none; stroke-width: 22; stroke-linecap: round; } .g-bg { stroke: var(--accent-soft); } .g-fg { stroke: var(--accent); }
@@ -319,3 +319,11 @@ html, body { overflow-x: hidden; }
 main { grid-template-columns: minmax(0, 1fr); } main > * { min-width: 0; }
 .rows { grid-template-columns: minmax(0, 1fr); } .rows > * { min-width: 0; } .row .grow b { max-width: 100%; }
 #plist .row .grow b { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+
+/* v18: লোগো-লোডার */
+.mbl { display: grid; justify-items: center; gap: 14px; padding: 18vh 0; color: var(--muted); font-size: .85rem; }
+.mbl i { display: block; width: 76px; height: 76px; -webkit-mask: url("/images/brand/favicon.png") center / contain no-repeat; mask: url("/images/brand/favicon.png") center / contain no-repeat;
+  background: linear-gradient(105deg, #C2540A 0%, #C2540A 35%, #FFC184 50%, #C2540A 65%, #C2540A 100%) 0 0 / 300% 100%; animation: mbl-sweep 1.25s ease-in-out infinite, mbl-pulse 1.25s ease-in-out infinite; }
+@keyframes mbl-sweep { from { background-position: 100% 0; } to { background-position: 0 0; } }
+@keyframes mbl-pulse { 0%, 100% { transform: scale(.94); } 50% { transform: scale(1.04); } }
+.mbl.in { padding: 12vh 0; }
