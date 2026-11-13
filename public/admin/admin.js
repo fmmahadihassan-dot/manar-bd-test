@@ -382,7 +382,7 @@
       $$('[data-ub]').forEach(function (b) { b.onclick = function () { api('admin/block/' + b.dataset.ub, { method: 'DELETE' }).then(function () { toast('Unblocked'); setup(); }, fail); }; });
       if (owner) {
         $('#ts').onclick = function () { api('admin/notify', { method: 'PUT', json: { tgToken: $('#tt').value.trim(), tgChat: $('#tc').value.trim() } }).then(function () { toast('Saved'); }, fail); };
-        $('#tt2').onclick = function () { api('admin/notify/test', { json: {} }).then(function (j) { toast(j.ok ? 'Test sent. Check Telegram.' : 'Could not send. Check token and chat ID (and press Start on your bot).'); }, fail); };
+        $('#tt2').onclick = function () { api('admin/notify/test', { json: {} }).then(function (j) { toast(j.ok ? 'Test sent. Check Telegram.' : 'Telegram says: ' + (j.err || 'unknown error')); }, fail); };
       }
     }, fail);
   }

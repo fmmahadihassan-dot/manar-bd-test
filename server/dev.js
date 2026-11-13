@@ -21,12 +21,12 @@ function makeD1(file) {
   db.exec('PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000;');
   const clean = (a) => a.map((v) => (v === undefined ? null : typeof v === 'boolean' ? (v ? 1 : 0) : v));
   const prep = (sql) => {
-    let args = []; const st = { get: (...a) => db.prepare(sql).get(...a), all: (...a) => db.prepare(sql).all(...a), run: (...a) => db.prepare(sql).run(...a) };   // লাগলে তখন কম্পাইল (টেবিল তৈরির আগে ইনডেক্স প্রস্তুত করা যায়)
+    let args = []; const isSel = /^\s*select/i.test(sql); const st = { get: (...a) => db.prepare(sql).get(...a), all: (...a) => db.prepare(sql).all(...a), run: (...a) => db.prepare(sql).run(...a) };   // লাগলে তখন কম্পাইল (টেবিল তৈরির আগে ইনডেক্স প্রস্তুত করা যায়)
     const o = {
       bind: (...a) => { args = clean(a); return o; },
       first: async () => { const r = st.get(...args); return r ? { ...r } : null; },
       all: async () => ({ results: st.all(...args).map((r) => ({ ...r })) }),
-      run: async () => { const r = st.run(...args); return { success: true, meta: { changes: Number(r.changes), last_row_id: Number(r.lastInsertRowid) } }; }
+      run: async () => { if (isSel) return o.all(); const r = st.run(...args); return { success: true, meta: { changes: Number(r.changes), last_row_id: Number(r.lastInsertRowid) } }; }
     };
     return o;
   };

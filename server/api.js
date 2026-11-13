@@ -69,10 +69,13 @@ const SCHEMA = [
   `CREATE TABLE IF NOT EXISTS blocked (phone TEXT PRIMARY KEY, note TEXT, created INTEGER NOT NULL)`,
   `CREATE INDEX IF NOT EXISTS i_attempts ON attempts(k, ts)`
 ];
+const SCHEMA_V = '15';
 const ready = new WeakMap();
 function ensureReady(db) {
   if (!ready.has(db)) {
     ready.set(db, (async () => {
+      // দ্রুত পথ: স্কিমা আগেই তৈরি থাকলে একটি মাত্র কোয়েরিতেই শেষ
+      try { const v = await db.prepare(`SELECT v FROM settings WHERE k='schema'`).first(); if (v && v.v === SCHEMA_V) return; } catch (e) { /* টেবিল এখনও নেই */ }
       await db.batch(SCHEMA.map((s) => db.prepare(s)));
       try { await db.prepare(`ALTER TABLE orders ADD COLUMN track_url TEXT`).run(); } catch (e) { /* কলাম আগেই আছে */ }
       try { await db.prepare(`ALTER TABLE orders ADD COLUMN loy INTEGER DEFAULT 0`).run(); } catch (e) { /* কলাম আগেই আছে */ }
@@ -87,6 +90,7 @@ function ensureReady(db) {
         st.push(db.prepare(`INSERT OR IGNORE INTO settings (k,v) VALUES ('seeded','1')`));
         await db.batch(st);
       }
+      await db.prepare(`INSERT INTO settings (k,v) VALUES ('schema',?) ON CONFLICT(k) DO UPDATE SET v=excluded.v`).bind(SCHEMA_V).run();
     })().catch((e) => { ready.delete(db); throw e; }));
   }
   return ready.get(db);
@@ -253,8 +257,8 @@ async function dashboardData(db, R) {
   const sum = (a) => a.reduce((x, o) => x + o.total, 0);
   const vis = async (from, to) => ((await db.prepare(`SELECT COUNT(DISTINCT vid) n FROM events WHERE t='visit' AND created>=? AND created<?`).bind(from, to).first()) || {}).n || 0;
   const uniq = async (t, from, to) => ((await db.prepare(`SELECT COUNT(DISTINCT vid) n FROM events WHERE t=? AND created>=? AND created<?`).bind(t, from, to).first()) || {}).n || 0;
-  const funnel = async (from, to, ordersN) => { const v = await uniq('product', from, to), c = await uniq('cart', from, to), k = await uniq('checkout', from, to); return { views: v, carts: c, checkouts: k, purchases: ordersN, abandoned: Math.max(0, c - ordersN) }; };
-  const fNow = await funnel(startMs, t0 + 1, cur.length), fPrev = await funnel(prevStart, startMs, prev.length);
+  const funnel = async (from, to, ordersN) => { const [v, c, k] = await Promise.all([uniq('product', from, to), uniq('cart', from, to), uniq('checkout', from, to)]); return { views: v, carts: c, checkouts: k, purchases: ordersN, abandoned: Math.max(0, c - ordersN) }; };
+  const [fNow, fPrev] = await Promise.all([funnel(startMs, t0 + 1, cur.length), funnel(prevStart, startMs, prev.length)]);
   const monthStart = Date.parse(todayKey.slice(0, 8) + '01T00:00:00Z') - BD;
   const monthRev = ((await db.prepare(`SELECT COALESCE(SUM(total),0) s FROM orders WHERE status<>'cancelled' AND created>=?`).bind(monthStart).first()) || {}).s || 0;
   const target = (await getSetting(db, 'target')) || { monthly: 50000 };
@@ -263,21 +267,25 @@ async function dashboardData(db, R) {
   const newUsers = ((await db.prepare(`SELECT COUNT(*) n FROM users WHERE created>=?`).bind(startMs).first()) || {}).n || 0;
   const act = await all(`SELECT uid, MAX(created) last, SUM(t='product') views, SUM(t='cart') carts, SUM(t='checkout') ck FROM events WHERE uid IS NOT NULL AND created>=? GROUP BY uid ORDER BY last DESC LIMIT 10`, t0 - 30 * 864e5);
   const activity = [];
-  for (const a of act) {
-    const u = await db.prepare(`SELECT name,email,phone FROM users WHERE id=?`).bind(a.uid).first(); if (!u) continue;
-    const lastOrd = ((await db.prepare(`SELECT MAX(created) t FROM orders WHERE user_id=? AND status<>'cancelled'`).bind(a.uid).first()) || {}).t || 0;
-    const rec = await all(`SELECT t,pid,created FROM events WHERE uid=? AND t IN ('cart','product') AND pid IS NOT NULL ORDER BY id DESC LIMIT 12`, a.uid);
+  await Promise.all(act.map(async (a) => {
+    const [u, lo, rec] = await Promise.all([
+      db.prepare(`SELECT name,email,phone FROM users WHERE id=?`).bind(a.uid).first(),
+      db.prepare(`SELECT MAX(created) t FROM orders WHERE user_id=? AND status<>'cancelled'`).bind(a.uid).first(),
+      all(`SELECT t,pid,created FROM events WHERE uid=? AND t IN ('cart','product') AND pid IS NOT NULL ORDER BY id DESC LIMIT 12`, a.uid)]);
+    if (!u) return; const lastOrd = (lo || {}).t || 0;
     const nm = (id) => (pmap[id] || {}).name || id;
     const carted = [...new Set(rec.filter((r) => r.t === 'cart' && r.created > lastOrd).map((r) => nm(r.pid)))].slice(0, 3);
     const viewed = [...new Set(rec.filter((r) => r.t === 'product').map((r) => nm(r.pid)))].slice(0, 3);
     activity.push({ name: u.name, contact: u.email || u.phone || '', last: a.last, views: a.views, carts: a.carts, checkouts: a.ck, carted, viewed, pending: carted.length > 0 });
-  }
+  }));
+  activity.sort((x, y) => y.last - x.last);
+  const V = await Promise.all([vis(startMs, t0 + 1), vis(prevStart, startMs)]);
   const top = (o, n) => Object.entries(o).sort((a, b) => b[1] - a[1]).slice(0, n);
   const aTot = Object.values(areas).reduce((x, y) => x + y, 0) || 1;
   return {
     range: R, days, revenue: days.map((d) => rev[d]), orders: days.map((d) => cnt[d]),
-    totals: { sales: sum(cur), orders: cur.length, visitors: await vis(startMs, t0 + 1) },
-    prev: { sales: sum(prev), orders: prev.length, visitors: await vis(prevStart, startMs) },
+    totals: { sales: sum(cur), orders: cur.length, visitors: V[0] },
+    prev: { sales: sum(prev), orders: prev.length, visitors: V[1] },
     categories: top(cats, 4).map(([k, v]) => ({ name: TAGNAMES[k] || k, value: v })), salesTotal: sum(cur),
     month: { revenue: monthRev, target: target.monthly }, funnel: fNow, funnelPrev: fPrev,
     sources: EV_SRC.map((k) => ({ name: k, n: (srcRows.find((r) => r.src === k) || {}).n || 0 })),
@@ -321,17 +329,20 @@ async function riskScore(db, { user, name, phone, addr, total, ip, ms, hp }) {
 }
 
 /* ---------- ফ্রি নোটিফিকেশন (Telegram) — ব্যর্থ হলে অর্ডার আটকায় না ---------- */
-async function notifyOwner(db, text) {
+async function notifyOwnerR(db, text) {
   try {
     const n = (await getSetting(db, 'notify')) || {};
-    if (!n.tgToken || !n.tgChat) return false;
-    const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), 3500);
+    if (!n.tgToken || !n.tgChat) return { ok: false, err: 'Token or Chat ID is not saved yet. Fill both and press Save first.' };
+    const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), 4000);
     try {
       const r = await fetch('https://api.telegram.org/bot' + encodeURIComponent(n.tgToken) + '/sendMessage', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ chat_id: n.tgChat, text, disable_web_page_preview: true }), signal: ctl.signal });
-      return r.ok;
+      if (r.ok) return { ok: true };
+      let d = ''; try { d = (await r.json()).description || ''; } catch (e) {}
+      return { ok: false, err: d || ('Telegram error ' + r.status) };
     } finally { clearTimeout(t); }
-  } catch (e) { return false; }
+  } catch (e) { return { ok: false, err: 'Could not reach Telegram (' + (e && e.name === 'AbortError' ? 'timeout' : 'network') + ').' }; }
 }
+async function notifyOwner(db, text) { return (await notifyOwnerR(db, text)).ok; }
 
 const orderOut = (o) => ({ id: o.id, number: o.number, name: o.name, phone: o.phone, dist: o.dist, address: o.address, note: o.note, items: JSON.parse(o.items), subtotal: o.subtotal, discount: o.discount, delivery: o.delivery, total: o.total, promo: o.promo, via: o.via, status: o.status, adminNote: o.admin_note || '', trackUrl: o.track_url || '', created: o.created, userId: o.user_id, risk: o.risk || 0, riskNote: o.risk_note || '' });
 
@@ -357,8 +368,10 @@ export async function handle(req, env) {
 
     /* ----- পাবলিক ----- */
     if (M === 'GET' && path === 'store') {
-      const rows = (await db.prepare(`SELECT * FROM products WHERE active=1 ORDER BY pos ASC, updated DESC`).all()).results;
-      return json({ products: rows.map(rowToProduct), hero: await getSetting(db, 'hero'), offer: await getSetting(db, 'offer'), promo: { percent: (await getSetting(db, 'promo')).percent }, requireLogin: await requireLogin(db), loyalty: await (async () => { const L = await getLoyalty(db); return { enabled: L.enabled, orders: L.orders, reward: L.reward, min: L.min }; })() });   // প্রোমো কোড এখানে পাঠানো হয় না
+      const [pr, st] = await db.batch([db.prepare(`SELECT * FROM products WHERE active=1 ORDER BY pos ASC, updated DESC`), db.prepare(`SELECT k,v FROM settings WHERE k IN ('hero','offer','promo','gate','loyalty')`)]);
+      const g = (k) => { const r = st.results.find((x) => x.k === k); return r ? JSON.parse(r.v) : SEED_SETTINGS[k]; };
+      const gate = g('gate'), L = { ...LOY_DEFAULT, ...(g('loyalty') || {}) };
+      return json({ products: pr.results.map(rowToProduct), hero: g('hero'), offer: g('offer'), promo: { percent: g('promo').percent }, requireLogin: !gate || gate.requireLogin !== false, loyalty: { enabled: L.enabled, orders: L.orders, reward: L.reward, min: L.min } });   // প্রোমো কোড এখানে পাঠানো হয় না
     }
     if (M === 'POST' && path === 'track') {
       const b = await body(), t = String(b.t || ''), vid = String(b.vid || '');
@@ -507,15 +520,18 @@ export async function handle(req, env) {
       admin(); const A = seg.slice(1).join('/');
 
       if (M === 'GET' && A === 'stats') {
-        const q = async (sql, ...a) => (await db.prepare(sql).bind(...a).first()) || {};
         const day = now() - 864e5;
+        const R = await db.batch([
+          db.prepare(`SELECT COUNT(*) n FROM orders WHERE status='pending'`),
+          db.prepare(`SELECT COUNT(*) n, COALESCE(SUM(total),0) s FROM orders WHERE created>? AND status<>'cancelled'`).bind(day),
+          db.prepare(`SELECT COUNT(*) n, COALESCE(SUM(total),0) s FROM orders WHERE status<>'cancelled'`),
+          db.prepare(`SELECT COUNT(*) n, COALESCE(SUM(total),0) s FROM orders WHERE status='delivered'`),
+          db.prepare(`SELECT COUNT(*) n FROM products`), db.prepare(`SELECT COUNT(*) n FROM users`),
+          db.prepare(`SELECT * FROM orders ORDER BY id DESC LIMIT 6`)]);
+        const f = (i) => R[i].results[0] || {};
         return json({
-          pending: (await q(`SELECT COUNT(*) n FROM orders WHERE status='pending'`)).n,
-          today: (await q(`SELECT COUNT(*) n, COALESCE(SUM(total),0) s FROM orders WHERE created>? AND status<>'cancelled'`, day)),
-          all: (await q(`SELECT COUNT(*) n, COALESCE(SUM(total),0) s FROM orders WHERE status<>'cancelled'`)),
-          delivered: (await q(`SELECT COUNT(*) n, COALESCE(SUM(total),0) s FROM orders WHERE status='delivered'`)),
-          products: (await q(`SELECT COUNT(*) n FROM products`)).n, users: (await q(`SELECT COUNT(*) n FROM users`)).n,
-          recent: (await db.prepare(`SELECT * FROM orders ORDER BY id DESC LIMIT 6`).all()).results.map(orderOut)
+          pending: f(0).n, today: f(1), all: f(2), delivered: f(3), products: f(4).n, users: f(5).n,
+          recent: R[6].results.map(orderOut)
         });
       }
       if (M === 'GET' && A === 'dashboard') return json(await dashboardData(db, [7, 30, 90].includes(+url.searchParams.get('range')) ? +url.searchParams.get('range') : 7));
@@ -584,7 +600,7 @@ export async function handle(req, env) {
           await setSetting(db, 'notify', { tgToken: tok.startsWith('••••') ? n.tgToken : tok, tgChat: chat }); return json({ ok: true });
         }
       }
-      if (M === 'POST' && A === 'notify/test') { if (user.role !== 'owner') throw bad('Only the owner can do this.', 403); return json({ ok: await notifyOwner(db, '✅ Manar BD: test notification. Orders will arrive here.') }); }
+      if (M === 'POST' && A === 'notify/test') { if (user.role !== 'owner') throw bad('Only the owner can do this.', 403); return json(await notifyOwnerR(db, '✅ Manar BD: test notification. Orders will arrive here.')); }
       if (M === 'GET' && A === 'settings') return json({ gate: { requireLogin: await requireLogin(db) }, hero: await getSetting(db, 'hero'), offer: await getSetting(db, 'offer'), promo: await getSetting(db, 'promo'), loyalty: await getLoyalty(db) });
       if (M === 'PUT' && A === 'settings') {
         const b = await body();
