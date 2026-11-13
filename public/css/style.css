@@ -4168,3 +4168,29 @@ form.search {
 .foot-contact h3 + .foot-addr { margin-top: 0; }
 .foot-contact .foot-addr { margin-top: 0; }
 .foot-addr, .foot-addr a, .foot-addr span { overflow-wrap: anywhere; font-size: .9rem; }
+
+/* ================== v17: স্ক্রল মসৃণ করা (দেখতে প্রায় একই, ফোনে অনেক হালকা) ================== */
+/* ব্রাউজারের নিজস্ব দ্রুত smooth-scroll বন্ধ; আমরা নিজেরা মাঝারি গতিতে চালাই (app.js এ smoothTo) */
+html { scroll-behavior: auto; }
+
+/* প্রতিটা কার্ডের ব্যাজ/স্ট্রিপের ব্লার সবচেয়ে ভারী; তাই ব্লারের বদলে একই রঙের আধা-স্বচ্ছ ব্যাকগ্রাউন্ড */
+.card-img .badge, .card-img .badge.sale, .card-img .badge.oos, .card-img .fd {
+  -webkit-backdrop-filter: none !important; backdrop-filter: none !important;
+}
+.card-img .badge, .card-img .badge.sale, .card-img .badge.oos { background: rgba(236, 236, 240, .86) !important; }
+.card-img .fd { background: rgba(255, 255, 255, .9) !important; }
+:root[data-theme="dark"] .card-img .fd { background: rgba(30, 30, 34, .88) !important; }
+
+/* ছবি আসার আগের ঝিলিক শুধু skeleton কার্ডে; আসল কার্ডে ১৬টা অ্যানিমেশন একসাথে চলত */
+.card-img { animation: none !important; }
+.card.sk .card-img { animation: mb-shimmer 1.3s linear infinite !important; }
+
+/* হেডার, উপরের স্ট্যাটাস-বার ও নিচের নেভিগেশন: স্ক্রলের সময় প্রতি ফ্রেমে ব্লার না করে প্রায়-ঘন রং */
+body::before, .top { -webkit-backdrop-filter: none; backdrop-filter: none; }
+body::before, .top { background: color-mix(in srgb, var(--surface) 94%, transparent); }
+.top .sq { -webkit-backdrop-filter: none; backdrop-filter: none; }
+
+/* কার্ড স্ক্রিনের বাইরে থাকলে ব্রাউজার আঁকে না; ভেতরে এলেই আঁকে (লম্বা তালিকায় বড় সুবিধা) */
+.grid > .card { content-visibility: auto; contain-intrinsic-size: auto 270px; }
+.card-img img { transform: translateZ(0); }
+img { image-rendering: auto; }

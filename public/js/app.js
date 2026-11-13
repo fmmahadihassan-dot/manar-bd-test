@@ -637,12 +637,24 @@
   }
   /* ---------- টোস্ট ও নেভিগেশন ---------- */
   var tt; function toast(m) { var e = $('#toast'); e.textContent = m; e.classList.add('show'); clearTimeout(tt); tt = setTimeout(function () { e.classList.remove('show'); }, 2400); }
-  function scrollTo(sel) { var e = $(sel); if (e) { var y = e.getBoundingClientRect().top + window.scrollY - 80; window.scrollTo({ top: y, behavior: 'smooth' }); } }
+  /* মাঝারি গতির মসৃণ স্ক্রল: দূরত্ব অনুযায়ী ৪২০–৮০০ms, শুরু ও শেষে ধীর */
+  var scrollRaf = 0;
+  function smoothTo(y) {
+    var y0 = window.pageYOffset, dy = y - y0; cancelAnimationFrame(scrollRaf);
+    if (!dy) return;
+    if (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches) { window.scrollTo(0, y); return; }
+    var dur = Math.max(420, Math.min(800, Math.abs(dy) * .45)), t0 = null;
+    function stop() { cancelAnimationFrame(scrollRaf); window.removeEventListener('touchstart', stop); window.removeEventListener('wheel', stop); }
+    window.addEventListener('touchstart', stop, { passive: true }); window.addEventListener('wheel', stop, { passive: true });
+    function step(t) { if (t0 === null) t0 = t; var p = Math.min(1, (t - t0) / dur), e = p < .5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2; window.scrollTo(0, y0 + dy * e); if (p < 1) scrollRaf = requestAnimationFrame(step); else stop(); }
+    scrollRaf = requestAnimationFrame(step);
+  }
+  function scrollTo(sel) { var e = $(sel); if (e) { var y = e.getBoundingClientRect().top + window.scrollY - 80; smoothTo(Math.max(0, y)); } }
   function setTag(tag) {
     st.tag = tag; st.q = ''; $('#q').value = ''; st.limit = 12; renderAll(); hideAll();
     setTimeout(function () { scrollTo('#chips'); }, 60);
   }
-  function goHome() { st.tag = 'all'; st.q = ''; $('#q').value = ''; renderAll(); hideAll(); window.scrollTo({ top: 0, behavior: 'smooth' }); }
+  function goHome() { st.tag = 'all'; st.q = ''; $('#q').value = ''; renderAll(); hideAll(); smoothTo(0); }
   function action(a) {
     if (a === 'home') goHome();
     else if (a === 'menu') show($('#menu'));
