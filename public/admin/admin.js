@@ -45,6 +45,10 @@
     $('#out').onclick = function () { api('auth/logout', { method: 'POST', json: {} }).then(function () { me = null; route(); }); };
   }
   var pendingCount = 0;
+  var IC = {
+    eye: '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill-rule="evenodd" d="M12 5C6.5 5 2.7 9.2 1.5 12c1.2 2.8 5 7 10.5 7s9.3-4.2 10.5-7C21.3 9.2 17.5 5 12 5zm0 11.5a4.5 4.5 0 1 1 0-9 4.5 4.5 0 0 1 0 9zm0-7a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5z"/></svg>',
+    cart: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 18a2 2 0 1 0 0 4 2 2 0 0 0 0-4zm10 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM1 2v2h2l3.6 7.6-1.4 2.4A2 2 0 0 0 7 17h12v-2H7.4l1.1-2h7.5a2 2 0 0 0 1.8-1l3.6-6.5A1 1 0 0 0 20.5 4H5.2l-.9-2H1z"/></svg>',
+    ok: '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill-rule="evenodd" d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm-1.5 14.5l-4-4 1.4-1.4 2.6 2.6 5.6-5.6 1.4 1.4-7 7z"/></svg>' };
   var LOADER = '<div class="mbl" role="status" aria-label="Loading"><i></i></div>';
   function loading() { app.innerHTML = LOADER; }
 
@@ -123,7 +127,7 @@
         '<section class="card wide"><div class="head"><h3>Customer activity</h3><small class="muted">logged-in customers · last 30 days</small></div>' +
         (d.activity.length ? '<div class="act">' + d.activity.map(function (a) {
           return '<div class="ar"><div class="av">' + esc((a.name || '?').charAt(0).toUpperCase()) + '</div><div class="grow"><b>' + esc(a.name) + '</b> <small class="muted">' + esc(a.contact) + ' · ' + ago(a.last) + '</small>' +
-            '<div class="chips"><span>👁 ' + a.views + ' viewed</span><span>🛒 ' + a.carts + ' added</span><span>✅ ' + a.checkouts + ' checkout</span></div>' +
+            '<div class="chips"><span>' + IC.eye + a.views + ' viewed</span><span>' + IC.cart + a.carts + ' added</span><span>' + IC.ok + a.checkouts + ' checkout</span></div>' +
             (a.pending ? '<small class="warn">In cart, not ordered: ' + esc(a.carted.join(', ')) + '</small>' : '') + (a.viewed.length ? '<small class="muted">Recently viewed: ' + esc(a.viewed.join(', ')) + '</small>' : '') + '</div></div>';
         }).join('') + '</div>' : '<p class="muted">No logged-in customer activity yet. It appears once customers sign in and browse.</p>') + '</section>' +
         '</div>', pendingCount);
@@ -309,22 +313,24 @@
   /* ---------- ব্যানার ---------- */
   function banners() {
     Promise.all([api('admin/settings'), api('admin/products')]).then(function (r) {
-      var hero = r[0].hero.slice(), prods = r[1].products;
+      var hero = r[0].hero.slice(), prods = r[1].products, repIdx = -1;
       var draw = function () {
         $('#blist').innerHTML = hero.map(function (h, i) {
-          return '<div class="card"><img class="banner-im" src="' + esc(fileUrl(h.img)) + '" alt=""><label class="f">Opens this product when tapped<select data-bp="' + i + '"><option value="">— none —</option>' +
+          return '<div class="card"><img class="banner-im rep" data-bi="' + i + '" title="Tap to replace this image" src="' + esc(fileUrl(h.img)) + '" alt=""><small class="muted">Tap the image to replace it</small><label class="f">Opens this product when tapped<select data-bp="' + i + '"><option value="">— none —</option>' +
             prods.map(function (p) { return '<option value="' + esc(p.id) + '"' + (h.product === p.id ? ' selected' : '') + '>' + esc(p.name) + '</option>'; }).join('') + '</select></label>' +
             '<label class="f">Short description <small>For screen readers</small><input data-ba="' + i + '" value="' + esc(h.alt) + '"></label><div class="stat-btns"><button type="button" class="btn line sm" data-bu="' + i + '"' + (i === 0 ? ' disabled' : '') + '>↑ Up</button><button type="button" class="btn line sm" data-bd="' + i + '"' + (i === hero.length - 1 ? ' disabled' : '') + '>↓ Down</button><button type="button" class="btn danger sm" data-br="' + i + '">Remove</button></div></div>';
         }).join('') || '<p class="muted">No banners yet. The banner section is hidden on the shop.</p>';
+        $$('[data-bi]').forEach(function (e) { e.onclick = function () { repIdx = +e.dataset.bi; $('#bfr').click(); }; });
         $$('[data-bp]').forEach(function (e) { e.onchange = function () { hero[+e.dataset.bp].product = e.value; }; });
         $$('[data-ba]').forEach(function (e) { e.oninput = function () { hero[+e.dataset.ba].alt = e.value; }; });
         $$('[data-bu]').forEach(function (e) { e.onclick = function () { var i = +e.dataset.bu, t = hero[i]; hero[i] = hero[i - 1]; hero[i - 1] = t; draw(); }; });
         $$('[data-bd]').forEach(function (e) { e.onclick = function () { var i = +e.dataset.bd, t = hero[i]; hero[i] = hero[i + 1]; hero[i + 1] = t; draw(); }; });
         $$('[data-br]').forEach(function (e) { e.onclick = function () { hero.splice(+e.dataset.br, 1); draw(); }; });
       };
-      shell('banners', '<h2>Banners</h2><div class="card"><p class="muted" style="margin:0">Use one image per banner, 16:9 (for example 1920 × 1080 px). The same image shows on mobile and desktop.</p><input type="file" id="bf" accept="image/*" hidden><label class="btn line" for="bf">+ Add banner image</label></div><div id="blist" class="rows"></div><div class="sticky-save"><button class="btn" id="bsave">Save banners</button></div>', pendingCount);
+      shell('banners', '<h2>Banners</h2><div class="card"><p class="muted" style="margin:0">Use one image per banner, 16:9 (for example 1920 × 1080 px). The same image shows on mobile and desktop.</p><input type="file" id="bf" accept="image/*" hidden><input type="file" id="bfr" accept="image/*" hidden><label class="btn line" for="bf">+ Add banner image</label></div><div id="blist" class="rows"></div><div class="sticky-save"><button class="btn" id="bsave">Save banners</button></div>', pendingCount);
       draw();
       $('#bf').onchange = function () { var f = this.files[0]; this.value = ''; if (!f) return; toast('Uploading…'); resize(f, 1920, .85).then(upload).then(function (u) { hero.push({ img: u, product: '', alt: '' }); draw(); toast('Image added. Remember to save.'); }, fail); };
+      $('#bfr').onchange = function () { var f = this.files[0]; this.value = ''; if (!f || repIdx < 0) return; var k = repIdx; toast('Uploading…'); resize(f, 1920, .85).then(upload).then(function (u) { hero[k].img = u; draw(); toast('Image replaced. Remember to save.'); }, fail); };
       $('#bsave').onclick = function () { api('admin/settings', { method: 'PUT', json: { hero: hero } }).then(function () { toast('Banners saved'); }, fail); };
     }, fail);
   }

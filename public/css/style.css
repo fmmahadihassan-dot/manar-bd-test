@@ -4222,3 +4222,25 @@ img { image-rendering: auto; }
 @keyframes mbl-sweep { from { background-position: 100% 0; } to { background-position: 0 0; } }
 @keyframes mbl-pulse { 0%, 100% { transform: scale(.94); } 50% { transform: scale(1.04); } }
 @media (prefers-reduced-motion: reduce) { .mbl i { animation: none; } }
+
+/* ================== v19 ================== */
+/* কার্ডের দাম: নতুন দাম ও পুরনো দাম পাশাপাশি, নিচে সবুজ "You save" */
+.pr-row { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.pr .sv { margin-top: 3px; font-size: .74rem; font-weight: 600; color: #168a47; }
+:root[data-theme="dark"] .pr .sv { color: #4ade80; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .pr .sv { color: #4ade80; } }
+
+/* লোডিং: গোলাকার হালকা উষ্ণ ব্যাকগ্রাউন্ডে লোগো, চারপাশে ঘুরন্ত বর্ডার */
+.mbl i { position: relative; width: 84px; height: 84px; border-radius: 50%; background: #FFEBD8; -webkit-mask: none; mask: none; animation: none; }
+.mbl i::before { content: ""; position: absolute; inset: 0; border-radius: 50%; border: 3px solid rgba(219, 98, 5, .18); border-top-color: #E5700A; animation: mbl-spin .9s linear infinite; }
+.mbl i::after { content: ""; position: absolute; inset: 22px; background: #F5820F; -webkit-mask: url("../images/brand/favicon.png") center / contain no-repeat; mask: url("../images/brand/favicon.png") center / contain no-repeat; animation: mbl-pulse 1.4s ease-in-out infinite; }
+@keyframes mbl-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .mbl i::before, .mbl i::after { animation: none; } }
+:root[data-theme="dark"] .mbl i { background: #3a2415; }
+/* ফুটার (মোবাইল): বাম কলাম একটু চওড়া যাতে ইমেইল না ভাঙে */
+.foot-cols { grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); }
+.foot-addr a, .foot-addr span { font-size: .82rem; }
+.foot-addr a[href^="mailto"] { overflow-wrap: normal; word-break: normal; white-space: nowrap; }
+.pr-row { flex-wrap: nowrap; gap: 6px; white-space: nowrap; }
+.pr-row b { font-size: clamp(1rem, 4.6vw, 1.2rem); }
+.pr-row s { font-size: .74rem; }

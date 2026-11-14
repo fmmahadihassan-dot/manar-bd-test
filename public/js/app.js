@@ -52,10 +52,10 @@
     var d = disc(p), x = vx(p), from = p.variants ? '<small class="from">From</small>' : '';
     return '<article class="card' + (inStock(p) ? '' : ' is-oos') + '" data-open="' + p.id + '" tabindex="0" role="button" aria-label="' + esc(p.name) + ' – view details">' +
       '<div class="card-img">' + pic(p) +
-      (!inStock(p) ? '<span class="badge oos">Out of stock</span>' : (p.badge ? '<span class="badge">' + p.badge + '</span>' : (d ? '<span class="badge sale">' + d + '% OFF</span>' : ''))) +
+      (!inStock(p) ? '<span class="badge oos">Out of stock</span>' : (p.badge ? '<span class="badge">' + p.badge + '</span>' : '')) +
       (p.free && inStock(p) ? '<span class="fd"><i class="fd-ic"></i>FREE DELIVERY</span>' : '') + '</div>' +
       '<h3>' + esc(p.name) + '</h3><p class="sub">' + esc(p.short || '') + '</p>' +
-      '<div class="card-foot"><div class="pr">' + from + '<b>' + money(minPrice(p)) + '</b>' + (x.old && !p.variants ? '<s>' + money(x.old) + '</s>' : '') + '</div>' +
+      '<div class="card-foot"><div class="pr">' + (from ? from : '') + '<div class="pr-row"><b>' + money(minPrice(p)) + '</b>' + (x.old && !p.variants ? '<s>' + money(x.old) + '</s>' : '') + '</div>' + (x.old && !p.variants && x.old > x.price ? '<span class="sv">You save ' + money(x.old - x.price) + '</span>' : '') + '</div>' +
       '<button class="add" data-add="' + p.id + '" aria-label="' + (inStock(p) ? 'Add to cart' : 'Out of stock') + '"' + (inStock(p) ? '' : ' disabled') + '>' + ic('plus') + '</button></div></article>';
   }
 
