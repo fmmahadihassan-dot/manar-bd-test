@@ -199,7 +199,7 @@ const rowToProduct = (r) => { const p = JSON.parse(r.data); p.id = r.id; return 
 async function priceOrder(db, items) {
   if (!Array.isArray(items) || !items.length || items.length > 30) throw bad('Your cart is empty.');
   const offer = await getSetting(db, 'offer'), promo = await getSetting(db, 'promo');
-  const lines = []; let sub = 0; const paid = [];
+  const lines = []; let sub = 0, anyFree = false; const paid = [];
   for (const it of items) {
     const r = await db.prepare(`SELECT * FROM products WHERE id=? AND active=1`).bind(str(it && it.id, 60)).first();
     if (!r) throw bad('A product in your cart is no longer available.', 409);
@@ -207,12 +207,13 @@ async function priceOrder(db, items) {
     const vi = p.variants ? int(it.v, 0, p.variants.length - 1) : 0, x = p.variants ? p.variants[vi || 0] : p;
     const qty = int(it.qty, 1, 99) || 1;
     lines.push({ id: p.id, name: p.name, variant: p.variants ? x.name : '', price: x.price, qty });
-    sub += x.price * qty; if (!p.free) paid.push(p.charge || 0);
+    sub += x.price * qty; if (p.free) anyFree = true; else paid.push(p.charge || 0);
   }
-  return { lines, sub, paid, offer, promo };
+  return { lines, sub, paid, anyFree, offer, promo };
 }
 function totalsOf(pr, code) {
-  let fee = pr.paid.length ? Math.max(...pr.paid) : 0;
+  // কার্টে একটি পণ্যও ফ্রি-ডেলিভারি হলে পুরো অর্ডারের ডেলিভারি ফ্রি; নাহলে সর্বোচ্চ চার্জ একবার
+  let fee = pr.anyFree || !pr.paid.length ? 0 : Math.max(...pr.paid);
   const useP = code && String(code).toUpperCase() === String(pr.promo.code).toUpperCase();
   const disc = useP ? Math.round(pr.sub * pr.promo.percent / 100) : 0;
   if (offerOn(pr.offer) && fee > 0 && pr.sub >= pr.offer.minOrder) fee = 0;

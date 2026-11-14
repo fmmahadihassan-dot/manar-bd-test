@@ -333,7 +333,7 @@ main { grid-template-columns: minmax(0, 1fr); } main > * { min-width: 0; }
 .chips svg { width: 15px; height: 15px; fill: var(--accent); flex: none; }
 .banner-im.rep { cursor: pointer; }
 .mbl { padding: 18vh 0; }
-.mbl i { position: relative; width: 84px; height: 84px; border-radius: 50%; background: #FFEBD8; -webkit-mask: none; mask: none; animation: none; display: block; }
-.mbl i::before { content: ""; position: absolute; inset: 0; border-radius: 50%; border: 3px solid rgba(219, 98, 5, .18); border-top-color: #E5700A; animation: mbl-spin .9s linear infinite; }
-.mbl i::after { content: ""; position: absolute; inset: 22px; background: #F5820F; -webkit-mask: url("/images/brand/favicon.png") center / contain no-repeat; mask: url("/images/brand/favicon.png") center / contain no-repeat; animation: mbl-pulse 1.4s ease-in-out infinite; }
+.mbl i { position: relative; width: 56px; height: 56px; border-radius: 50%; background: #FFEBD8; -webkit-mask: none; mask: none; animation: none; display: block; }
+.mbl i::before { content: ""; position: absolute; inset: 0; border-radius: 50%; border: 2.5px solid rgba(219, 98, 5, .18); border-top-color: #E5700A; animation: mbl-spin .9s linear infinite; }
+.mbl i::after { content: ""; position: absolute; inset: 14px; background: #F5820F; -webkit-mask: url("/images/brand/favicon.png") center / contain no-repeat; mask: url("/images/brand/favicon.png") center / contain no-repeat; animation: mbl-pulse 1.4s ease-in-out infinite; }
 @keyframes mbl-spin { to { transform: rotate(360deg); } }

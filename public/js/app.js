@@ -235,16 +235,16 @@
   /* ---------- কার্টের হিসাব ---------- */
   function lines() { return cart.map(function (l) { var p = byId(l.id); return { key: l.id + '|' + l.v, l: l, p: p, x: vx(p, l.v) }; }); }
   function totals() {
-    var L = lines(), sub = 0, count = 0, paid = [];
-    L.forEach(function (o) { sub += o.x.price * o.l.qty; count += o.l.qty; if (!o.p.free) paid.push(o.p.charge || 0); });
-    // ডেলিভারি: সব পণ্য ফ্রি হলে ফ্রি, নাহলে চার্জ-যুক্ত পণ্যগুলোর সর্বোচ্চ চার্জ একবারই
-    var fee = paid.length ? Math.max.apply(null, paid) : 0;
+    var L = lines(), sub = 0, count = 0, paid = [], anyFree = false;
+    L.forEach(function (o) { sub += o.x.price * o.l.qty; count += o.l.qty; if (o.p.free) anyFree = true; else paid.push(o.p.charge || 0); });
+    // ডেলিভারি: কার্টে একটি পণ্যও ফ্রি-ডেলিভারি হলে সব ফ্রি; নাহলে চার্জ-যুক্ত পণ্যগুলোর সর্বোচ্চ চার্জ একবারই
+    var fee = anyFree || !paid.length ? 0 : Math.max.apply(null, paid);
     var d = !promoOn ? 0 : promoKind === 'loyalty' ? (sub >= S.loyalty.min ? Math.min(promoAmt, sub) : 0) : Math.round(sub * S.promo.percent / 100);
     // অফার চালু থাকলে নির্দিষ্ট অঙ্কের অর্ডারে ডেলিভারি ফ্রি
     var offer = offerOn(), offerFree = offer && fee > 0 && sub >= S.offer.minOrder;
     var offerLeft = offer && fee > 0 && !offerFree ? S.offer.minOrder - sub : 0;
     if (offerFree) fee = 0;
-    return { L: L, sub: sub, count: count, fee: fee, disc: d, total: sub - d + fee, nPaid: paid.length, offerFree: offerFree, offerLeft: offerLeft };
+    return { L: L, sub: sub, count: count, fee: fee, disc: d, total: sub - d + fee, nPaid: anyFree ? 0 : paid.length, anyFree: anyFree, offerFree: offerFree, offerLeft: offerLeft };
   }
   function saveCart() { store.set('manar_cart', cart); }
   function addToCart(id, v, qty) {
@@ -312,6 +312,7 @@
     if (t.offerFree) note = '<p class="note offer-note">Free Delivery offer applied on orders of ' + money(S.offer.minOrder) + ' or more.</p>';
     else if (t.fee && t.offerLeft > 0) note = '<p class="note offer-note">Add ' + money(t.offerLeft) + ' more to get free delivery.</p>' + (t.L.length > 1 ? '<p class="note">Delivery is charged once, even with multiple items.</p>' : '');
     else if (t.fee && t.L.length > 1) note = '<p class="note">Delivery is charged once, even with multiple items.</p>';
+    else if (!t.fee && t.anyFree && t.L.length > 1) note = '<p class="note">One of your items has free delivery, so your whole order ships free.</p>';
     else if (!t.fee && t.L.length) note = '<p class="note">All your items ship free.</p>';
     $('#bill').innerHTML =
       (promoOn ? '<div class="r disc"><span>' + (promoKind === 'loyalty' ? 'Reward ' + promoCode + (t.disc ? '' : ' (needs ' + money(S.loyalty.min) + '+)') : 'Promo ' + promoCode + ' (' + S.promo.percent + '% off)') + '<button type="button" class="rm" id="rmPromo">Remove</button></span><b>−' + money(t.disc) + '</b></div>' : '') +
